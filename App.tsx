@@ -4,7 +4,10 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+
 import { GameEngine } from "./GameEngine";
+import { soundEngine } from "./SoundEngine";
+
 import { OpeningSequence } from "./OpeningSequence";
 import { HUD } from "./HUD";
 import { MobileControls } from "./MobileControls";
