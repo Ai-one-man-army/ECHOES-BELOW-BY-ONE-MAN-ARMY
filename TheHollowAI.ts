@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { SoundEvent, TheHollowState } from '../types';
 import { TheHollowCreature } from './TheHollowCreature';
-import { soundEngine } from '../audio/SoundEngine';
+import { soundEngine } from "./SoundEngine";
 import { soundEvents } from './SoundEventManager';
 
 interface Waypoint {
