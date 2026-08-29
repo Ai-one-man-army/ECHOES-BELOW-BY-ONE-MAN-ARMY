@@ -5,16 +5,13 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import GameEngine from "./GameEngine";
-import { OpeningSequence } from './components/OpeningSequence';
-import { HUD } from './components/HUD';
-import { MobileControls } from './components/MobileControls';
-import { PauseMenu } from './components/PauseMenu';
-import { Sector9Modal } from './components/Sector9Modal';
-import { GameOverModal } from './components/GameOverModal';
-import { CreditsScreen } from './components/CreditsScreen';
-import { GameSettings, GameStatus, GraphicsQuality, InteractableObject, Objective, PlayerStats } from './types';
-import { soundEngine } from './audio/SoundEngine';
-
+import { OpeningSequence } from "./components/OpeningSequence";
+import { HUD } from "./components/HUD";
+import { MobileControls } from "./components/MobileControls";
+import { PauseMenu } from "./components/PauseMenu";
+import { Sector9Modal } from "./components/Sector9Modal";
+import { GameOverModal } from "./components/GameOverModal";
+import { CreditsScreen } from "./components/CreditsScreen";
 const SETTINGS_STORAGE_KEY = 'echoes_below_settings_v1';
 
 export default function App() {
