@@ -5,12 +5,13 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import GameEngine from "./GameEngine";
+import GameEngine from "./GameEngine";
 import { OpeningSequence } from "./OpeningSequence";
 import { HUD } from "./HUD";
 import { MobileControls } from "./MobileControls";
 import { PauseMenu } from "./PauseMenu";
-import { Sector9Modal } from "./Sector9Modal";
-import { GameOverModal } from "./GameOverModal";
+import Sector9Modal from "./Sector9Modal";
+import GameOverModal from "./GameOverModal";
 import { CreditsScreen } from "./CreditsScreen";
 
 
