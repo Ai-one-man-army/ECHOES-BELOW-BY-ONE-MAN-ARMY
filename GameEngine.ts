@@ -4,7 +4,7 @@ import { WorldBuilder } from './WorldBuilder';
 import { PlayerController } from './PlayerController';
 import { TheHollowAI } from './TheHollowAI';
 import { soundEvents } from './SoundEventManager';
-import { soundEngine } from '../audio/SoundEngine';
+import { soundEngine } from "./SoundEngine";
 
 export class GameEngine {
   public container: HTMLElement;
