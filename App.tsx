@@ -5,14 +5,14 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import GameEngine from "./GameEngine";
-import { OpeningSequence } from "./components/OpeningSequence";
-import { HUD } from "./components/HUD";
-import { MobileControls } from "./components/MobileControls";
-import { PauseMenu } from "./components/PauseMenu";
-import { Sector9Modal } from "./components/Sector9Modal";
-import { GameOverModal } from "./components/GameOverModal";
-import { CreditsScreen } from "./components/CreditsScreen";
-const SETTINGS_STORAGE_KEY = 'echoes_below_settings_v1';
+import { OpeningSequence } from "./OpeningSequence";
+import { HUD } from "./HUD";
+import { MobileControls } from "./MobileControls";
+import { PauseMenu } from "./PauseMenu";
+import { Sector9Modal } from "./Sector9Modal";
+import { GameOverModal } from "./GameOverModal";
+import { CreditsScreen } from "./CreditsScreen";
+
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
