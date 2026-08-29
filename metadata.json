@@ -1,0 +1,7 @@
+{
+  "name": "Echoes Below",
+  "description": "A 3D first-person underground research facility horror game prototype built with Three.js and WebGL.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
