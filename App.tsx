@@ -10,7 +10,7 @@ import { HUD } from "./HUD";
 import { MobileControls } from "./MobileControls";
 import { PauseMenu } from "./PauseMenu";
 import { Sector9Modal } from "./Sector9Modal";
-import GameOverModal from "./GameOverModal";
+import { GameOverModal } from "./GameOverModal";
 import { CreditsScreen } from "./CreditsScreen";
 
 
