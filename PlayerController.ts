@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GameSettings, InteractableObject } from '../types';
-import { soundEngine } from '../audio/SoundEngine';
+import { soundEngine } from "./SoundEngine";
 import { soundEvents } from './SoundEventManager';
 
 export interface PlayerInputState {
