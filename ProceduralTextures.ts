@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Procedural texture generator for dark underground research facility.
+ * Procedural texture & normal map generator for dark underground research facility.
  * Generates textures at runtime on HTML5 Canvas to keep the application lightweight,
  * fast-loading, and completely self-contained.
  */
@@ -12,7 +12,7 @@ export class TextureGenerator {
   /**
    * Gritty, stained concrete floor/wall texture with expansion seams and grunge
    */
-  public static createConcreteTexture(color: string = '#2a2d30', darkColor: string = '#141618'): THREE.CanvasTexture {
+  public static createConcreteTexture(color: string = '#2d3136', darkColor: string = '#181b1e'): THREE.CanvasTexture {
     const key = `concrete_${color}_${darkColor}`;
     if (this.cache.has(key)) return this.cache.get(key)!;
 
@@ -29,7 +29,7 @@ export class TextureGenerator {
     const imgData = ctx.getImageData(0, 0, 512, 512);
     const data = imgData.data;
     for (let i = 0; i < data.length; i += 4) {
-      const noise = (Math.random() - 0.5) * 35;
+      const noise = (Math.random() - 0.5) * 28;
       data[i] = Math.min(255, Math.max(0, data[i] + noise));
       data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
       data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
@@ -37,13 +37,13 @@ export class TextureGenerator {
     ctx.putImageData(imgData, 0, 0);
 
     // Stains and water drips
-    for (let s = 0; s < 12; s++) {
+    for (let s = 0; s < 10; s++) {
       const x = Math.random() * 512;
       const y = Math.random() * 512;
-      const radius = 20 + Math.random() * 60;
+      const radius = 25 + Math.random() * 70;
       const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
-      grad.addColorStop(0, darkColor + '88');
-      grad.addColorStop(0.7, darkColor + '33');
+      grad.addColorStop(0, darkColor + 'aa');
+      grad.addColorStop(0.6, darkColor + '44');
       grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.beginPath();
@@ -52,8 +52,8 @@ export class TextureGenerator {
     }
 
     // Concrete slab tile grid
-    ctx.strokeStyle = '#0e1012';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#121416';
+    ctx.lineWidth = 3;
     ctx.strokeRect(0, 0, 512, 512);
     ctx.beginPath();
     ctx.moveTo(256, 0);
@@ -65,6 +65,52 @@ export class TextureGenerator {
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 4;
+    this.cache.set(key, texture);
+    return texture;
+  }
+
+  /**
+   * Procedural bump map for concrete surface micro-relief
+   */
+  public static createConcreteBumpMap(): THREE.CanvasTexture {
+    const key = 'concrete_bump';
+    if (this.cache.has(key)) return this.cache.get(key)!;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+
+    // Mid-gray baseline (128, 128, 128)
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, 256, 256);
+
+    const imgData = ctx.getImageData(0, 0, 256, 256);
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const n = (Math.random() - 0.5) * 45;
+      const val = Math.min(255, Math.max(0, 128 + n));
+      data[i] = val;
+      data[i + 1] = val;
+      data[i + 2] = val;
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    // Expansion joint recess (darker = recessed)
+    ctx.strokeStyle = '#202020';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(128, 0);
+    ctx.lineTo(128, 256);
+    ctx.moveTo(0, 128);
+    ctx.lineTo(256, 128);
+    ctx.stroke();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 4;
     this.cache.set(key, texture);
     return texture;
   }
@@ -82,46 +128,98 @@ export class TextureGenerator {
     const ctx = canvas.getContext('2d')!;
 
     // Dark steel base
-    ctx.fillStyle = '#222528';
+    ctx.fillStyle = '#22262a';
     ctx.fillRect(0, 0, 512, 512);
 
     // Brushed metal streaks
-    for (let i = 0; i < 400; i++) {
-      ctx.fillStyle = Math.random() > 0.5 ? '#353a3f' : '#181b1d';
+    for (let i = 0; i < 350; i++) {
+      ctx.fillStyle = Math.random() > 0.5 ? '#32373c' : '#191b1e';
       ctx.fillRect(0, Math.random() * 512, 512, 1 + Math.random() * 2);
     }
 
-    // Panel divisions
+    // Panel divisions & beveled border
     ctx.strokeStyle = '#101214';
     ctx.lineWidth = 6;
     ctx.strokeRect(0, 0, 512, 512);
-    ctx.strokeRect(20, 20, 472, 472);
+
+    ctx.strokeStyle = '#2d3339';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(12, 12, 488, 488);
 
     // Rivets along edges
-    ctx.fillStyle = '#4a5056';
     const drawRivet = (x: number, y: number) => {
+      ctx.fillStyle = '#4c5258';
       ctx.beginPath();
       ctx.arc(x, y, 4, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#101214';
+      ctx.fillStyle = '#121416';
       ctx.beginPath();
       ctx.arc(x + 1, y + 1, 2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#4a5056';
     };
 
-    for (let x = 40; x <= 472; x += 40) {
-      drawRivet(x, 30);
-      drawRivet(x, 482);
+    for (let x = 30; x <= 482; x += 38) {
+      drawRivet(x, 24);
+      drawRivet(x, 488);
     }
-    for (let y = 40; y <= 472; y += 40) {
-      drawRivet(30, y);
-      drawRivet(482, y);
+    for (let y = 30; y <= 482; y += 38) {
+      drawRivet(24, y);
+      drawRivet(488, y);
     }
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 4;
+    this.cache.set(key, texture);
+    return texture;
+  }
+
+  /**
+   * Procedural bump map for metal panel rivets and seams
+   */
+  public static createMetalBumpMap(): THREE.CanvasTexture {
+    const key = 'metal_bump';
+    if (this.cache.has(key)) return this.cache.get(key)!;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, 256, 256);
+
+    // Inset border seam
+    ctx.strokeStyle = '#303030';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(6, 6, 244, 244);
+
+    // Raised rivets (bright = protruding)
+    const drawRaisedRivet = (x: number, y: number) => {
+      const grad = ctx.createRadialGradient(x - 1, y - 1, 0, x, y, 3);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.7, '#a0a0a0');
+      grad.addColorStop(1, '#606060');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    for (let x = 15; x <= 241; x += 19) {
+      drawRaisedRivet(x, 12);
+      drawRaisedRivet(x, 244);
+    }
+    for (let y = 15; y <= 241; y += 19) {
+      drawRaisedRivet(12, y);
+      drawRaisedRivet(244, y);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 4;
     this.cache.set(key, texture);
     return texture;
   }
@@ -154,14 +252,15 @@ export class TextureGenerator {
     }
 
     // Weathering/scratches
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    for (let i = 0; i < 30; i++) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    for (let i = 0; i < 25; i++) {
       ctx.fillRect(Math.random() * 256, Math.random() * 256, 40, 2);
     }
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 4;
     this.cache.set(key, texture);
     return texture;
   }
@@ -179,11 +278,11 @@ export class TextureGenerator {
     const ctx = canvas.getContext('2d')!;
 
     // Heavy reinforced dark steel
-    ctx.fillStyle = '#1e2124';
+    ctx.fillStyle = '#1a1d20';
     ctx.fillRect(0, 0, 512, 512);
 
     // Inner beveled blast plate
-    ctx.fillStyle = '#282c30';
+    ctx.fillStyle = '#26292d';
     ctx.fillRect(24, 24, 464, 464);
     ctx.strokeStyle = '#0f1113';
     ctx.lineWidth = 10;
@@ -224,6 +323,7 @@ export class TextureGenerator {
     }
 
     const texture = new THREE.CanvasTexture(canvas);
+    texture.anisotropy = 4;
     this.cache.set(key, texture);
     return texture;
   }
@@ -272,6 +372,8 @@ export class TextureGenerator {
     ctx.fillRect(30, yPos + 10, 14, 20);
 
     const texture = new THREE.CanvasTexture(canvas);
+    texture.anisotropy = 4;
     return texture;
   }
 }
+

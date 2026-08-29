@@ -1,7 +1,13 @@
 import * as THREE from 'three';
-import { GameSettings, InteractableObject } from '../types';
-import { soundEngine } from "./SoundEngine";
+import { ColliderType, GameSettings, InteractableObject, PhysicsCollider } from '../types';
+import { soundEngine } from '../audio/SoundEngine';
 import { soundEvents } from './SoundEventManager';
+
+export const PLAYER_SPAWN = {
+  x: 0,
+  y: 1.75,
+  z: 18,
+};
 
 export interface PlayerInputState {
   forward: boolean;
@@ -33,7 +39,7 @@ export class PlayerController {
   public settings: GameSettings;
 
   // Position & Velocity
-  public position: THREE.Vector3 = new THREE.Vector3(0, 1.7, 14); // Start in arrival corridor
+  public position: THREE.Vector3 = new THREE.Vector3(PLAYER_SPAWN.x, PLAYER_SPAWN.y, PLAYER_SPAWN.z);
   public velocity: THREE.Vector3 = new THREE.Vector3(0, 0, 0);
 
   // Rotation angles (Euler YXZ)
@@ -43,10 +49,10 @@ export class PlayerController {
   public currentYaw: number = 0;
 
   // Player physical dimensions
-  public radius: number = 0.38;
-  public standHeight: number = 1.7;
-  public crouchHeight: number = 0.95;
-  public currentHeight: number = 1.7;
+  public radius: number = 0.30;
+  public standHeight: number = 1.75;
+  public crouchHeight: number = 1.0;
+  public currentHeight: number = 1.75;
 
   // States
   public isRunning: boolean = false;
@@ -84,13 +90,16 @@ export class PlayerController {
     joystickY: 0,
   };
 
-  // Interaction
+  // Interaction & Callbacks
   public hoveredInteractable: InteractableObject | null = null;
   public onInteractCallback?: (item: InteractableObject) => void;
   public onPauseCallback?: () => void;
+  public onToggleDebugPhysics?: () => void;
 
   // Pointer lock state
   private pointerLockSupported: boolean = false;
+  private lastPointerLockExitTime: number = 0;
+  private pointerLockCooldownMs: number = 350;
 
   constructor(camera: THREE.PerspectiveCamera, domElement: HTMLElement, settings: GameSettings) {
     this.camera = camera;
@@ -101,38 +110,36 @@ export class PlayerController {
     this.currentYaw = this.yaw;
 
     this.initFlashlight();
-    this.initPointerLock();
     this.bindEvents();
   }
 
   private initFlashlight() {
-    this.flashlightTarget = new THREE.Object3D();
-    this.flashlightTarget.position.set(0, 0, -8);
-    this.camera.add(this.flashlightTarget);
+    this.flashlight = new THREE.SpotLight(0xfffaed, this.flashlightBaseIntensity, 24, Math.PI / 5.2, 0.42, 1.2);
+    this.flashlight.castShadow = true;
+    this.flashlight.shadow.mapSize.width = 1024;
+    this.flashlight.shadow.mapSize.height = 1024;
+    this.flashlight.shadow.camera.near = 0.1;
+    this.flashlight.shadow.camera.far = 24;
+    this.flashlight.shadow.bias = -0.001;
 
-    // Warm halogen horror flashlight beam - Stable, persistent SpotLight
-    this.flashlight = new THREE.SpotLight(0xfffaea, this.flashlightBaseIntensity, 30, Math.PI / 5.2, 0.55, 1.25);
     this.flashlight.position.set(0.2, -0.2, 0.1);
-    this.flashlight.target = this.flashlightTarget;
-    this.flashlight.castShadow = this.settings.graphics !== 'LOW';
-    this.flashlight.shadow.mapSize.width = 512;
-    this.flashlight.shadow.mapSize.height = 512;
-    this.flashlight.shadow.bias = -0.002;
+
+    this.flashlightTarget = new THREE.Object3D();
+    this.flashlightTarget.position.set(0, 0, -5);
+
     this.camera.add(this.flashlight);
-
-    this.flashlightCurrentIntensity = this.flashlightBaseIntensity;
-    this.flashlightTargetIntensity = this.flashlightBaseIntensity;
-  }
-
-  private initPointerLock() {
-    this.pointerLockSupported = 'pointerLockElement' in document;
+    this.camera.add(this.flashlightTarget);
+    this.flashlight.target = this.flashlightTarget;
   }
 
   private bindEvents() {
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
     window.addEventListener('mousemove', this.handleMouseMove);
+
+    this.pointerLockSupported = 'pointerLockElement' in document;
     document.addEventListener('pointerlockchange', this.handlePointerLockChange);
+    document.addEventListener('pointerlockerror', this.handlePointerLockError);
   }
 
   public dispose() {
@@ -140,14 +147,26 @@ export class PlayerController {
     window.removeEventListener('keyup', this.handleKeyUp);
     window.removeEventListener('mousemove', this.handleMouseMove);
     document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
+    document.removeEventListener('pointerlockerror', this.handlePointerLockError);
   }
 
   public requestPointerLock() {
     if (this.pointerLockSupported && this.domElement) {
+      // Respect browser security cooldown period between pointer lock exit and next lock request
+      const now = performance.now();
+      if (now - this.lastPointerLockExitTime < this.pointerLockCooldownMs) {
+        return;
+      }
+
       try {
-        this.domElement.requestPointerLock();
+        const promise = (this.domElement as any).requestPointerLock?.();
+        if (promise && typeof promise.catch === 'function') {
+          promise.catch(() => {
+            // Silently absorb security rate-limit rejections without console error
+          });
+        }
       } catch {
-        // Fallback for mobile/unsupported
+        // Handled silently
       }
     }
   }
@@ -155,11 +174,21 @@ export class PlayerController {
   public exitPointerLock() {
     if (document.pointerLockElement === this.domElement) {
       document.exitPointerLock();
+      this.lastPointerLockExitTime = performance.now();
     }
   }
 
   private handlePointerLockChange = () => {
-    this.isLocked = document.pointerLockElement === this.domElement;
+    const isNowLocked = document.pointerLockElement === this.domElement;
+    if (!isNowLocked && this.isLocked) {
+      this.lastPointerLockExitTime = performance.now();
+    }
+    this.isLocked = isNowLocked;
+  };
+
+  private handlePointerLockError = () => {
+    // Record timestamp on error to prevent immediate rapid retries
+    this.lastPointerLockExitTime = performance.now();
   };
 
   private handleKeyDown = (e: KeyboardEvent) => {
@@ -198,6 +227,12 @@ export class PlayerController {
         break;
       case 'KeyE':
         this.triggerInteraction();
+        break;
+      case 'F3':
+        e.preventDefault();
+        if (this.onToggleDebugPhysics) {
+          this.onToggleDebugPhysics();
+        }
         break;
       case 'Escape':
         if (this.onPauseCallback) {
@@ -244,7 +279,6 @@ export class PlayerController {
     // Clamp pitch to prevent somersaults
     this.pitch = Math.max(-1.48, Math.min(1.48, this.pitch));
 
-    // If camera smoothing is disabled (0), sync immediately
     if (!this.settings.cameraSmoothing || this.settings.cameraSmoothing === 0) {
       this.currentYaw = this.yaw;
       this.currentPitch = this.pitch;
@@ -283,7 +317,6 @@ export class PlayerController {
 
   /**
    * Trigger an intentional, controlled horror flicker event.
-   * Example: ON -> dim -> OFF briefly -> ON (never flickers continuously)
    */
   public triggerControlledFlicker() {
     if (!this.flashlightOn) return;
@@ -299,9 +332,8 @@ export class PlayerController {
 
   public toggleCrouch(colliders?: THREE.Box3[]) {
     if (this.isCrouching) {
-      // Check overhead clearance before standing up
       if (colliders && !this.canStandUp(colliders)) {
-        return; // Overhead blockage prevents standing
+        return;
       }
       this.isCrouching = false;
     } else {
@@ -333,9 +365,18 @@ export class PlayerController {
   /**
    * Update player physics, collision, stamina, and camera positioning
    */
-  public update(delta: number, colliders: THREE.Box3[], interactables: Map<string, InteractableObject>) {
-    // Safe bounded delta to prevent physics jumps
-    const dt = Math.min(delta, 0.1);
+  public update(
+    delta: number,
+    colliders: PhysicsCollider[] | THREE.Box3[],
+    interactables: Map<string, InteractableObject>
+  ) {
+    const dt = Math.min(delta, 0.05);
+
+    // Safety Out-of-Bounds Reset
+    if (this.position.y < -5 || isNaN(this.position.x) || isNaN(this.position.z)) {
+      this.position.set(PLAYER_SPAWN.x, PLAYER_SPAWN.y, PLAYER_SPAWN.z);
+      this.velocity.set(0, 0, 0);
+    }
 
     // 1. Crouch Height Interpolation (smooth ease)
     const targetHeight = this.isCrouching ? this.crouchHeight : this.standHeight;
@@ -365,17 +406,16 @@ export class PlayerController {
 
     const isMoving = moveLenSq > 0.01;
 
-    // 3. Stamina & Speed Curve
-    let speed = 3.6; // Normal walk speed in m/s
+    // 3. Stamina & Speed (Walk: 2.8m/s, Sprint: 4.4m/s, Crouch: 1.6m/s)
+    let speed = 2.8;
     if (this.isCrouching) {
-      speed = 1.8;
+      speed = 1.6;
       this.isRunning = false;
-      // Recover stamina faster when crouching
       this.stamina = Math.min(this.maxStamina, this.stamina + dt * 25);
     } else if (this.input.run && isMoving && this.stamina > 5) {
       this.isRunning = true;
-      speed = 6.2;
-      this.stamina = Math.max(0, this.stamina - dt * 28);
+      speed = 4.4;
+      this.stamina = Math.max(0, this.stamina - dt * 25);
       if (this.stamina <= 0) {
         this.isRunning = false;
       }
@@ -392,7 +432,7 @@ export class PlayerController {
     _targetVelocity.addScaledVector(_forwardVec, -moveZ * speed);
     _targetVelocity.addScaledVector(_rightVec, moveX * speed);
 
-    // Frame-rate-independent smooth acceleration & deceleration damping
+    // Smooth acceleration & deceleration damping
     const accelRate = isMoving ? 14 : 18;
     const lerpFactor = 1 - Math.exp(-accelRate * dt);
     this.velocity.lerp(_targetVelocity, lerpFactor);
@@ -403,7 +443,7 @@ export class PlayerController {
     // 6. Camera Look Smoothing
     const smoothing = this.settings.cameraSmoothing ?? 0.3;
     if (smoothing > 0) {
-      const rotSpeed = 35 - smoothing * 22; // higher = faster/crisper
+      const rotSpeed = 35 - smoothing * 22;
       const rotLerp = 1 - Math.exp(-rotSpeed * dt);
       this.currentPitch += (this.pitch - this.currentPitch) * rotLerp;
       this.currentYaw += (this.yaw - this.currentYaw) * rotLerp;
@@ -415,15 +455,14 @@ export class PlayerController {
     _euler.set(this.currentPitch, this.currentYaw, 0, 'YXZ');
     this.camera.quaternion.setFromEuler(_euler);
 
-    // 7. Head Bobbing & Footsteps (Subtle, never nauseating)
+    // 7. Head Bobbing & Footsteps (Subtle)
     const currentSpeed = this.velocity.length();
     if (currentSpeed > 0.2) {
-      const bobFreq = this.isRunning ? 12 : this.isCrouching ? 6 : 8.5;
+      const bobFreq = this.isRunning ? 11 : this.isCrouching ? 6 : 8.0;
       this.bobTimer += dt * bobFreq;
 
-      // Natural vertical and lateral bob
-      const ampY = this.isRunning ? 0.045 : this.isCrouching ? 0.012 : 0.024;
-      const ampX = this.isRunning ? 0.025 : this.isCrouching ? 0.008 : 0.015;
+      const ampY = this.isRunning ? 0.035 : this.isCrouching ? 0.010 : 0.020;
+      const ampX = this.isRunning ? 0.020 : this.isCrouching ? 0.006 : 0.012;
 
       const bobY = Math.sin(this.bobTimer) * ampY;
       const bobX = Math.cos(this.bobTimer * 0.5) * ampX;
@@ -434,7 +473,6 @@ export class PlayerController {
         this.position.z
       );
 
-      // Footstep sound at the bottom phase of the step
       const currentBobPhase = Math.sin(this.bobTimer);
       if (this.lastBobPhase > 0 && currentBobPhase <= 0) {
         soundEngine.playFootstep(this.isRunning, this.isCrouching);
@@ -444,16 +482,13 @@ export class PlayerController {
       }
       this.lastBobPhase = currentBobPhase;
     } else {
-      // Noise decay when stationary
       this.currentNoise = Math.max(0, this.currentNoise - dt * 25);
-      // Gentle breathing idle sway
-      const breath = Math.sin(performance.now() * 0.002) * 0.008;
+      const breath = Math.sin(performance.now() * 0.002) * 0.006;
       this.camera.position.set(this.position.x, this.position.y + breath, this.position.z);
     }
 
     // 8. Flashlight Stabilization & Controlled Flickering
     if (this.flashlightOn) {
-      // Handle controlled horror flicker sequence if active
       if (this.flickerSequence.length > 0) {
         const step = this.flickerSequence[0];
         this.flickerTimer += dt;
@@ -469,15 +504,13 @@ export class PlayerController {
         this.flashlightTargetIntensity = this.flashlightBaseIntensity;
       }
 
-      // Smooth intensity interpolation (no sudden frame jumps)
       this.flashlightCurrentIntensity +=
         (this.flashlightTargetIntensity - this.flashlightCurrentIntensity) * Math.min(1, dt * 20);
       this.flashlight.intensity = this.flashlightCurrentIntensity;
       this.flashlight.visible = this.flashlightCurrentIntensity > 0.01;
 
-      // Smooth handheld sway with gentle damping
-      const targetSwayX = 0.20 - this.velocity.x * 0.015;
-      const targetSwayY = -0.20 - this.velocity.y * 0.015;
+      const targetSwayX = 0.20 - this.velocity.x * 0.012;
+      const targetSwayY = -0.20 - this.velocity.y * 0.012;
       this.flashlightSway.x += (targetSwayX - this.flashlightSway.x) * Math.min(1, dt * 8);
       this.flashlightSway.y += (targetSwayY - this.flashlightSway.y) * Math.min(1, dt * 8);
       this.flashlight.position.set(this.flashlightSway.x, this.flashlightSway.y, 0.1);
@@ -488,52 +521,116 @@ export class PlayerController {
   }
 
   /**
-   * Continuous axis-aligned bounding box collision resolution with stable wall sliding
-   * (Zero object allocation)
+   * Continuous cylinder-vs-AABB multi-pass collision resolution.
+   * Isolates WALL, DOOR, and OBJECT obstacles; ignores floors, ceilings, and triggers.
+   * Prevents cross-axis locking, eliminates invisible walls, and delivers smooth wall sliding.
    */
-  private resolveCollisions(dt: number, colliders: THREE.Box3[]) {
+  private resolveCollisions(dt: number, colliders: PhysicsCollider[] | THREE.Box3[]) {
     _moveStep.copy(this.velocity).multiplyScalar(dt);
 
-    const skin = 0.001; // tiny margin to prevent sticking
+    const targetPos = new THREE.Vector3(
+      this.position.x + _moveStep.x,
+      this.currentHeight,
+      this.position.z + _moveStep.z
+    );
 
-    // --- 1. Resolve X Axis ---
-    this.position.x += _moveStep.x;
-    this.updatePlayerBox();
+    // Player vertical bounds
+    const playerFeetY = 0.05;
+    const playerHeadY = this.currentHeight + 0.08;
+    const radius = this.radius;
 
-    for (let i = 0; i < colliders.length; i++) {
-      const col = colliders[i];
-      if (col.isEmpty()) continue;
-      if (_playerBox.intersectsBox(col)) {
-        if (_moveStep.x > 0) {
-          this.position.x = col.min.x - this.radius - skin;
-        } else if (_moveStep.x < 0) {
-          this.position.x = col.max.x + this.radius + skin;
+    // Multi-pass relaxation allows smooth sliding across corner vertices and multi-box seams
+    const MAX_PASSES = 4;
+
+    for (let pass = 0; pass < MAX_PASSES; pass++) {
+      let collided = false;
+
+      for (let i = 0; i < colliders.length; i++) {
+        const item = colliders[i];
+        let box: THREE.Box3;
+
+        // Check if item is PhysicsCollider or raw Box3
+        if ('box' in item && 'type' in item) {
+          // PhysicsCollider: skip if disabled or non-blocking (floor, ceiling, trigger)
+          if (!item.enabled || item.type === ColliderType.FLOOR || item.type === ColliderType.CEILING || item.type === ColliderType.TRIGGER) {
+            continue;
+          }
+          box = item.box;
+        } else {
+          box = item as THREE.Box3;
         }
-        this.velocity.x = 0;
-        this.updatePlayerBox();
+
+        if (box.isEmpty()) continue;
+
+        // 1. Skip if no vertical overlap (e.g. floor below player or high ceiling/lintel above head)
+        if (playerHeadY <= box.min.y || playerFeetY >= box.max.y) {
+          continue;
+        }
+
+        // 2. 2D Circle vs 2D AABB in horizontal (X-Z) plane
+        const px = targetPos.x;
+        const pz = targetPos.z;
+
+        // Closest point on the AABB in XZ
+        const cx = Math.max(box.min.x, Math.min(px, box.max.x));
+        const cz = Math.max(box.min.z, Math.min(pz, box.max.z));
+
+        const dx = px - cx;
+        const dz = pz - cz;
+        const distSq = dx * dx + dz * dz;
+
+        // Circle overlaps the box boundary
+        if (distSq < radius * radius && distSq > 0.0000001) {
+          const dist = Math.sqrt(distSq);
+          const overlap = radius - dist;
+          const nx = dx / dist;
+          const nz = dz / dist;
+
+          // Push position outwards along contact normal
+          targetPos.x += nx * overlap;
+          targetPos.z += nz * overlap;
+
+          // Slide velocity along collision normal (preserve perpendicular velocity)
+          const velDot = this.velocity.x * nx + this.velocity.z * nz;
+          if (velDot < 0) {
+            this.velocity.x -= velDot * nx;
+            this.velocity.z -= velDot * nz;
+          }
+          collided = true;
+        } else if (distSq <= 0.0000001) {
+          // Circle center is inside the box (deep penetration recovery)
+          const distMinX = px - box.min.x;
+          const distMaxX = box.max.x - px;
+          const distMinZ = pz - box.min.z;
+          const distMaxZ = box.max.z - pz;
+
+          const minDist = Math.min(distMinX, distMaxX, distMinZ, distMaxZ);
+
+          if (minDist === distMinX) {
+            targetPos.x = box.min.x - radius - 0.002;
+            if (this.velocity.x > 0) this.velocity.x = 0;
+          } else if (minDist === distMaxX) {
+            targetPos.x = box.max.x + radius + 0.002;
+            if (this.velocity.x < 0) this.velocity.x = 0;
+          } else if (minDist === distMinZ) {
+            targetPos.z = box.min.z - radius - 0.002;
+            if (this.velocity.z > 0) this.velocity.z = 0;
+          } else {
+            targetPos.z = box.max.z + radius + 0.002;
+            if (this.velocity.z < 0) this.velocity.z = 0;
+          }
+          collided = true;
+        }
       }
+
+      if (!collided) break;
     }
 
-    // --- 2. Resolve Z Axis ---
-    this.position.z += _moveStep.z;
-    this.updatePlayerBox();
-
-    for (let i = 0; i < colliders.length; i++) {
-      const col = colliders[i];
-      if (col.isEmpty()) continue;
-      if (_playerBox.intersectsBox(col)) {
-        if (_moveStep.z > 0) {
-          this.position.z = col.min.z - this.radius - skin;
-        } else if (_moveStep.z < 0) {
-          this.position.z = col.max.z + this.radius + skin;
-        }
-        this.velocity.z = 0;
-        this.updatePlayerBox();
-      }
-    }
-
-    // Keep height constant to current crouch/stand height
+    this.position.x = targetPos.x;
+    this.position.z = targetPos.z;
     this.position.y = this.currentHeight;
+
+    this.updatePlayerBox();
   }
 
   private updatePlayerBox() {
@@ -544,22 +641,26 @@ export class PlayerController {
 
   /**
    * Center ray test to detect interactable items within range
-   * (Zero object allocations)
    */
   private checkInteraction(interactables: Map<string, InteractableObject>) {
     _scratchForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
 
     let closestItem: InteractableObject | null = null;
-    let closestDist = 2.8; // Maximum interaction range in meters
+    let closestDist = 2.8;
 
     for (const item of interactables.values()) {
-      _toItem.set(item.position[0] - this.camera.position.x, item.position[1] - this.camera.position.y, item.position[2] - this.camera.position.z);
+      _toItem.set(
+        item.position[0] - this.camera.position.x,
+        item.position[1] - this.camera.position.y,
+        item.position[2] - this.camera.position.z
+      );
       const dist = _toItem.length();
+      const maxRange = item.distanceThreshold || closestDist;
 
-      if (dist <= closestDist) {
+      if (dist <= maxRange) {
         _toItem.normalize();
         const dot = _scratchForward.dot(_toItem);
-        if (dot > 0.72) {
+        if (dot > 0.65) {
           closestItem = item;
           closestDist = dist;
         }

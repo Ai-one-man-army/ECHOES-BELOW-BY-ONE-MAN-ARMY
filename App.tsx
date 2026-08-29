@@ -4,18 +4,18 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { GameEngine } from './game/GameEngine';
+import { OpeningSequence } from './components/OpeningSequence';
+import { HUD } from './components/HUD';
+import { MobileControls } from './components/MobileControls';
+import { PauseMenu } from './components/PauseMenu';
+import { Sector9Modal } from './components/Sector9Modal';
+import { GameOverModal } from './components/GameOverModal';
+import { CreditsScreen } from './components/CreditsScreen';
+import { GameSettings, GameStatus, GraphicsQuality, InteractableObject, Objective, PlayerStats } from './types';
+import { soundEngine } from './audio/SoundEngine';
 
-import { GameEngine } from "./GameEngine";
-import { soundEngine } from "./SoundEngine";
-
-import { OpeningSequence } from "./OpeningSequence";
-import { HUD } from "./HUD";
-import { MobileControls } from "./MobileControls";
-import { PauseMenu } from "./PauseMenu";
-import { Sector9Modal } from "./Sector9Modal";
-import { GameOverModal } from "./GameOverModal";
-import { CreditsScreen } from "./CreditsScreen";
-
+const SETTINGS_STORAGE_KEY = 'echoes_below_settings_v1';
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -223,6 +223,12 @@ export default function App() {
     }
   };
 
+  const handleToggleDebug = () => {
+    if (engineRef.current) {
+      engineRef.current.toggleDebugPhysics();
+    }
+  };
+
   return (
     <div
       id="game-root-container"
@@ -254,6 +260,7 @@ export default function App() {
             notification={notification}
             notificationType={notificationType}
             onPauseClick={handlePause}
+            onToggleDebug={handleToggleDebug}
             isMobile={isMobile}
           />
 

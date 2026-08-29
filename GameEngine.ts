@@ -4,7 +4,7 @@ import { WorldBuilder } from './WorldBuilder';
 import { PlayerController } from './PlayerController';
 import { TheHollowAI } from './TheHollowAI';
 import { soundEvents } from './SoundEventManager';
-import { soundEngine } from "./SoundEngine";
+import { soundEngine } from '../audio/SoundEngine';
 
 export class GameEngine {
   public container: HTMLElement;
@@ -155,6 +155,21 @@ export class GameEngine {
         this.pauseGame();
       }
     };
+
+    this.playerController.onToggleDebugPhysics = () => {
+      this.toggleDebugPhysics();
+    };
+  }
+
+  public toggleDebugPhysics(): boolean {
+    const isEnabled = this.worldBuilder.toggleDebugColliders();
+    if (this.onNotification) {
+      this.onNotification(
+        `COLLISION DEBUG (F3): ${isEnabled ? 'ACTIVE' : 'OFF'} (${this.worldBuilder.getBlockingColliders().length} active colliders)`,
+        isEnabled ? 'info' : 'warn'
+      );
+    }
+    return isEnabled;
   }
 
   private setupResizeHandler() {
@@ -233,7 +248,7 @@ export class GameEngine {
 
   public restartGame() {
     // Reset player position and health
-    this.playerController.position.set(0, 1.7, 14);
+    this.playerController.position.set(0, 1.75, 18);
     this.playerController.velocity.set(0, 0, 0);
     this.playerController.yaw = 0;
     this.playerController.pitch = 0;
@@ -242,7 +257,7 @@ export class GameEngine {
     this.hurtTimer = 0;
 
     this.playerStats = {
-      position: { x: 0, y: 1.7, z: 14 },
+      position: { x: 0, y: 1.75, z: 18 },
       isRunning: false,
       isCrouching: false,
       stamina: 100,
@@ -275,20 +290,20 @@ export class GameEngine {
   public respawnAtCheckpoint() {
     // Determine safest checkpoint based on player progression
     let safeX = 0;
-    let safeZ = 12;
+    let safeZ = 18; // Checkpoint Lobby
 
     if (this.playerStats.hasPowerRestored && this.playerStats.hasSector9Keycard) {
       safeX = 0;
-      safeZ = 6; // Main corridor intersection
+      safeZ = -2; // Main corridor North near Control Hub
     } else if (this.playerStats.hasPowerRestored) {
-      safeX = 12;
-      safeZ = 4; // East wing hallway
+      safeX = 0;
+      safeZ = 5; // Main corridor Mid
     } else if (this.playerStats.hasSector9Keycard) {
-      safeX = -12;
-      safeZ = 4; // West wing hallway
+      safeX = 0;
+      safeZ = 5; // Main corridor Mid
     }
 
-    this.playerController.position.set(safeX, 1.7, safeZ);
+    this.playerController.position.set(safeX, 1.75, safeZ);
     this.playerController.velocity.set(0, 0, 0);
     this.playerController.yaw = 0;
     this.playerController.pitch = 0;

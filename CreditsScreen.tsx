@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Play, Pause, RotateCcw, Volume2, Shield } from 'lucide-react';
-import { soundEngine } from "./SoundEngine";
+import { soundEngine } from '../audio/SoundEngine';
 
 interface CreditsScreenProps {
   onBack: () => void;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { SoundEvent, TheHollowState } from '../types';
+import { ColliderType, PhysicsCollider, SoundEvent, TheHollowState } from '../types';
 import { TheHollowCreature } from './TheHollowCreature';
-import { soundEngine } from "./SoundEngine";
+import { soundEngine } from '../audio/SoundEngine';
 import { soundEvents } from './SoundEventManager';
 
 interface Waypoint {
@@ -72,11 +72,11 @@ export class TheHollowAI {
 
   // Lurking shadowy spawn spots
   private lurkPositions = [
-    { x: 0, z: -26 },  // Sector 9 deep chamber
-    { x: 0, z: -10 },  // Sector 9 corridor
-    { x: -14, z: -12 }, // Biology Lab back dark corner
-    { x: 14, z: -12 },  // Sub-Station dark alcove
-    { x: 14, z: 12 },   // Storage archive dark crates
+    { x: 0, z: -25 },  // Sector 9 deep chamber
+    { x: 0, z: -15 },  // Sector 9 corridor
+    { x: -5.5, z: 0 }, // Biology Lab
+    { x: 5.5, z: 0 },  // Sub-Station
+    { x: 5.5, z: 10 }, // Storage archive
   ];
   private currentLurkIndex: number = 0;
 
@@ -93,32 +93,23 @@ export class TheHollowAI {
       this.waypoints.set(id, { id, x, z, neighbors });
     };
 
-    // Main corridors
-    addWp('start_corridor', 0, 12, ['crossroads']);
-    addWp('crossroads', 0, 4, ['start_corridor', 'west_hall', 'east_hall', 'sector9_gate']);
-    addWp('west_hall', -8, 4, ['crossroads', 'lab1_door', 'security_door']);
-    addWp('east_hall', 8, 4, ['crossroads', 'lab2_door', 'storage_door']);
+    // Checkpoint & Main Corridor Spine
+    addWp('checkpoint_spawn', 0, 18, ['corridor_south']);
+    addWp('corridor_south', 0, 10, ['checkpoint_spawn', 'corridor_mid', 'sec_office', 'storage_room']);
+    addWp('sec_office', -5.5, 10, ['corridor_south']);
+    addWp('storage_room', 5.5, 10, ['corridor_south']);
 
-    // Sector 9 Corridors
-    addWp('sector9_gate', 0, -2, ['crossroads', 'sector9_mid']);
-    addWp('sector9_mid', 0, -10, ['sector9_gate', 'sector9_deep']);
-    addWp('sector9_deep', 0, -26, ['sector9_mid']);
+    addWp('corridor_mid', 0, 5, ['corridor_south', 'corridor_north', 'biolab', 'power_substation']);
+    addWp('biolab', -5.5, 0, ['corridor_mid']);
+    addWp('power_substation', 5.5, 0, ['corridor_mid']);
 
-    // Lab 1 (Biology Wing)
-    addWp('lab1_door', -14, 4, ['west_hall', 'lab1_center']);
-    addWp('lab1_center', -14, -6, ['lab1_door', 'lab1_back']);
-    addWp('lab1_back', -14, -12, ['lab1_center']);
+    addWp('corridor_north', 0, -2, ['corridor_mid', 'control_hub']);
+    addWp('control_hub', 0, -8.5, ['corridor_north', 'sector9_gate']);
 
-    // Lab 2 (Sub-Station)
-    addWp('lab2_door', 14, 4, ['east_hall', 'lab2_center']);
-    addWp('lab2_center', 14, -6, ['lab2_door', 'lab2_back']);
-    addWp('lab2_back', 14, -12, ['lab2_center']);
-
-    // Security & Archive
-    addWp('security_door', -14, 8, ['west_hall', 'security_office']);
-    addWp('security_office', -14, 12, ['security_door']);
-    addWp('storage_door', 14, 8, ['east_hall', 'storage_room']);
-    addWp('storage_room', 14, 12, ['storage_door']);
+    // Sector 9 Containment Area
+    addWp('sector9_gate', 0, -13, ['control_hub', 'sector9_mid']);
+    addWp('sector9_mid', 0, -18, ['sector9_gate', 'sector9_deep']);
+    addWp('sector9_deep', 0, -25, ['sector9_mid']);
   }
 
   public reset(lurkIndex: number = 0) {
@@ -146,7 +137,7 @@ export class TheHollowAI {
     playerYaw: number,
     isFlashlightOn: boolean,
     isPlayerCrouching: boolean,
-    colliders: THREE.Box3[]
+    colliders: PhysicsCollider[] | THREE.Box3[]
   ) {
     const dt = Math.min(delta, 0.1);
 
@@ -209,7 +200,7 @@ export class TheHollowAI {
     illuminatedByFlashlight: boolean,
     isPlayerCrouching: boolean,
     acousticHit: { event: SoundEvent; perceivedVolume: number; distance: number } | null,
-    colliders: THREE.Box3[]
+    colliders: PhysicsCollider[] | THREE.Box3[]
   ) {
     this.stateTimer -= dt;
 
@@ -503,7 +494,7 @@ export class TheHollowAI {
     return null;
   }
 
-  private moveTowardsTarget(dt: number, colliders: THREE.Box3[]) {
+  private moveTowardsTarget(dt: number, colliders: PhysicsCollider[] | THREE.Box3[]) {
     if (this.currentSpeed <= 0.01) {
       this.creature.group.position.copy(this.position);
       this.creature.group.rotation.y = this.rotation;
@@ -542,7 +533,18 @@ export class TheHollowAI {
       let blockedX = false;
       _testPos.set(this.position.x + nx, 1.2, this.position.z);
       for (let i = 0; i < colliders.length; i++) {
-        const box = colliders[i];
+        const item = colliders[i];
+        let box: THREE.Box3;
+
+        if ('box' in item && 'type' in item) {
+          if (!item.enabled || item.type === ColliderType.FLOOR || item.type === ColliderType.CEILING || item.type === ColliderType.TRIGGER) {
+            continue;
+          }
+          box = item.box;
+        } else {
+          box = item as THREE.Box3;
+        }
+
         if (box.isEmpty()) continue;
         if (
           _testPos.x + creatureRadius > box.min.x &&
@@ -560,7 +562,18 @@ export class TheHollowAI {
       let blockedZ = false;
       _testPos.set(this.position.x, 1.2, this.position.z + nz);
       for (let i = 0; i < colliders.length; i++) {
-        const box = colliders[i];
+        const item = colliders[i];
+        let box: THREE.Box3;
+
+        if ('box' in item && 'type' in item) {
+          if (!item.enabled || item.type === ColliderType.FLOOR || item.type === ColliderType.CEILING || item.type === ColliderType.TRIGGER) {
+            continue;
+          }
+          box = item.box;
+        } else {
+          box = item as THREE.Box3;
+        }
+
         if (box.isEmpty()) continue;
         if (
           _testPos.x + creatureRadius > box.min.x &&
@@ -625,7 +638,7 @@ export class TheHollowAI {
     }
   }
 
-  public checkLineOfSight(playerPos: THREE.Vector3, colliders: THREE.Box3[]): boolean {
+  public checkLineOfSight(playerPos: THREE.Vector3, colliders: PhysicsCollider[] | THREE.Box3[]): boolean {
     _origin.set(this.position.x, 2.0, this.position.z);
     _target.set(playerPos.x, playerPos.y, playerPos.z);
     _dir.copy(_target).sub(_origin);
@@ -635,7 +648,18 @@ export class TheHollowAI {
 
     _ray.set(_origin, _dir);
     for (let i = 0; i < colliders.length; i++) {
-      const box = colliders[i];
+      const item = colliders[i];
+      let box: THREE.Box3;
+
+      if ('box' in item && 'type' in item) {
+        if (!item.enabled || item.type === ColliderType.FLOOR || item.type === ColliderType.CEILING || item.type === ColliderType.TRIGGER) {
+          continue;
+        }
+        box = item.box;
+      } else {
+        box = item as THREE.Box3;
+      }
+
       if (box.isEmpty()) continue;
       const hit = _ray.intersectBox(box, _scratchHit);
       if (hit && _origin.distanceTo(hit) < totalDist - 0.4) {

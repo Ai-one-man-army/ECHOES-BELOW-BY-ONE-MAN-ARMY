@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 export type GraphicsQuality = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export type GameStatus = 'TITLE' | 'INTRO' | 'PLAYING' | 'PAUSED' | 'SECTOR9_OPENED' | 'SECTOR_9_ENDING' | 'GAME_OVER';
@@ -76,6 +78,23 @@ export interface LightFlickerConfig {
   color: number;
   flickerRate: number; // 0 to 1
   flickerType: 'erratic' | 'steady_hum' | 'dying' | 'pulse';
+}
+
+export enum ColliderType {
+  WALL = 'WALL',
+  DOOR = 'DOOR',
+  OBJECT = 'OBJECT',
+  FLOOR = 'FLOOR',
+  CEILING = 'CEILING',
+  TRIGGER = 'TRIGGER',
+}
+
+export interface PhysicsCollider {
+  id: string;
+  type: ColliderType;
+  box: THREE.Box3;
+  enabled: boolean;
+  name: string;
 }
 
 

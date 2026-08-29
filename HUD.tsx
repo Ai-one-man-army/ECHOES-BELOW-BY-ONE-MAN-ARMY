@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { InteractableObject, Objective, PlayerStats } from '../types';
-import { Flashlight, ShieldAlert, Zap, KeyRound, Pause, Eye, Volume2, Radio, HeartPulse } from 'lucide-react';
+import { Flashlight, ShieldAlert, Zap, KeyRound, Pause, Eye, Volume2, Radio, HeartPulse, Boxes } from 'lucide-react';
 
 interface HUDProps {
   objective: Objective;
@@ -10,6 +10,7 @@ interface HUDProps {
   notification: string | null;
   notificationType: 'info' | 'warn' | 'success';
   onPauseClick: () => void;
+  onToggleDebug?: () => void;
   isMobile: boolean;
 }
 
@@ -20,6 +21,7 @@ export const HUD: React.FC<HUDProps> = ({
   notification,
   notificationType,
   onPauseClick,
+  onToggleDebug,
   isMobile,
 }) => {
   const noiseVal = stats.currentNoise || 0;
@@ -68,8 +70,20 @@ export const HUD: React.FC<HUDProps> = ({
           </p>
         </motion.div>
 
-        {/* Top Right: Status & Pause Button */}
+        {/* Top Right: Status, Debug & Pause Button */}
         <div className="flex items-center space-x-2">
+          {onToggleDebug && (
+            <button
+              id="debug-hud-btn"
+              onClick={onToggleDebug}
+              className="pointer-events-auto bg-neutral-900/80 hover:bg-emerald-950/80 border border-neutral-700 hover:border-emerald-500 text-neutral-300 hover:text-emerald-300 px-2.5 py-1.5 transition-all active:scale-95 shadow-md flex items-center space-x-1.5 text-xs font-mono"
+              title="Toggle Collision Physics Boxes (F3)"
+            >
+              <Boxes className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">DEBUG [F3]</span>
+            </button>
+          )}
+
           <div className="hidden sm:flex items-center space-x-2 bg-black/60 px-3 py-1.5 border border-neutral-800 text-[11px] font-mono text-neutral-400">
             <span>TIME: 03:16 AM</span>
             <span className="text-neutral-600">|</span>
