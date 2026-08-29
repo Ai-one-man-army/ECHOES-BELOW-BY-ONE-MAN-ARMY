@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Info, Volume2 } from 'lucide-react';
-import { soundEngine } from '../audio/SoundEngine';
+import ... from "./SoundEngine";
 
 interface OpeningSequenceProps {
   onComplete: () => void;
